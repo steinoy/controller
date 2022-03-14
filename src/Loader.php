@@ -12,7 +12,7 @@ class Loader
 
     // User
     private $namespace;
-    private $path;
+    private $paths;
 
     // Internal
     private $listOfFiles;
@@ -32,12 +32,7 @@ class Loader
         $this->setNamespace();
 
         // Set the path using $this->namespace assuming PSR4 autoloading
-        $this->setPath();
-
-        // Return if there are no Controller files
-        if (!file_exists($this->path)) {
-            return;
-        }
+        $this->setPaths();
 
         // Set the list of files from the Controller files namespace/path
         $this->setListOfFiles();
@@ -61,8 +56,8 @@ class Loader
     {
         $this->namespace =
             (has_filter('sober/controller/namespace')
-            ? apply_filters('sober/controller/namespace', rtrim($this->namespace))
-            : 'App\Controllers');
+                ? apply_filters('sober/controller/namespace', rtrim($this->namespace))
+                : 'App\Controllers');
     }
 
     /**
@@ -70,10 +65,10 @@ class Loader
      *
      * Set the path assuming PSR4 autoloading from $this->namespace
      */
-    protected function setPath()
+    protected function setPaths()
     {
-        $reflection = new \ReflectionClass($this->namespace .'\App');
-        $this->path = dirname($reflection->getFileName());
+        $reflection = new \ReflectionClass($this->namespace . '\App');
+        $this->paths = apply_filters('sober/controller/paths', [dirname($reflection->getFileName())]);
     }
 
     /**
@@ -83,7 +78,15 @@ class Loader
      */
     protected function setListOfFiles()
     {
-        $this->listOfFiles = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($this->path));
+        $this->listOfFiles = new \AppendIterator();
+        
+        foreach ($this->paths as $path) {
+            if (!file_exists($path)) {
+                continue;
+            }
+
+            $this->listOfFiles->append(new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($path)));
+        }
     }
 
     /**
@@ -105,7 +108,12 @@ class Loader
             }
 
             // Set the classes to run
-            $this->classesToRun[] = $this->namespace . '\\' . pathinfo($filename, PATHINFO_FILENAME);
+            //
+            // Whatever class is added first overrides the others
+            $class = $this->namespace . '\\' . pathinfo($filename, PATHINFO_FILENAME);
+            if(!in_array($class, $this->classesToRun)) {
+                $this->classesToRun[] = $class;
+            }
         }
     }
 
